@@ -7,18 +7,13 @@ namespace Veeam.Test.Task.FolderSynchronization
     {
         static void Main(string[] args)
         {
-
+            Console.WriteLine("Please pass:  <sourceFolder> <replicaFolder> <logFilePath> <intervalInMilliSeconds> and hit enter");
+            string input = Console.ReadLine();
+            args = input.Split(' ');
             if (args.Length != 4)
             {
-                Console.WriteLine("Please pass:  <sourceFolder> <replicaFolder> <logFilePath> <intervalInMilliSeconds> and hit enter");
-                string input = Console.ReadLine();
-                args = input.Split(' ');
-                if (args.Length != 4)
-                {
-                    Console.WriteLine("Incorrect number of arguments. Try again.");
-                    return;
-                }
-                
+                Console.WriteLine("Incorrect number of arguments. Try again.");
+                return;
             }
 
             var sourceFolder = args[0];
