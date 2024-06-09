@@ -31,50 +31,75 @@ namespace Veeam.Test.Task.FolderSynchronization
 
         private bool FileContentsAreEqual(string file1, string file2)
         {
-            using (var md5 = MD5.Create())
+            try
             {
-                var hash1 = md5.ComputeHash(File.ReadAllBytes(file1));
-                var hash2 = md5.ComputeHash(File.ReadAllBytes(file2));
-                return hash1.SequenceEqual(hash2);
+                using (var sha256 = SHA256.Create())
+                {
+                    var hash1 = ComputeFileHash(file1, sha256);
+                    var hash2 = ComputeFileHash(file2, sha256);
+                    return hash1.SequenceEqual(hash2);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error comparing files: {ex.Message}");
+                return false;
+            }
+        }
+        private byte[] ComputeFileHash(string filePath, HashAlgorithm hashAlgorithm)
+        {
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                return hashAlgorithm.ComputeHash(stream);
             }
         }
 
         private bool DirectoriesAreEqual(string dir1, string dir2)
         {
-            var dir1Files = Directory.GetFiles(dir1, "*", SearchOption.AllDirectories).OrderBy(p => p).ToArray();
-            var dir2Files = Directory.GetFiles(dir2, "*", SearchOption.AllDirectories).OrderBy(p => p).ToArray();
-
-            var dir1Directories = Directory.GetDirectories(dir1, "*", SearchOption.AllDirectories).OrderBy(p => p).ToArray();
-            var dir2Directories = Directory.GetDirectories(dir2, "*", SearchOption.AllDirectories).OrderBy(p => p).ToArray();
-
-            // Compare number of files and directories
-            if (dir1Files.Length != dir2Files.Length || dir1Directories.Length != dir2Directories.Length)
+            try
             {
+                var dir1Files = Directory.GetFiles(dir1, "*", SearchOption.AllDirectories)
+                          .Select(p => PathExtensions.GetRelativePath(dir1, p))
+                          .OrderBy(p => p)
+                          .ToArray();
+
+                var dir2Files = Directory.GetFiles(dir2, "*", SearchOption.AllDirectories)
+                                         .Select(p => PathExtensions.GetRelativePath(dir2, p))
+                                         .OrderBy(p => p)
+                                         .ToArray();
+
+                var dir1Directories = Directory.GetDirectories(dir1, "*", SearchOption.AllDirectories)
+                                               .Select(p => PathExtensions.GetRelativePath(dir1, p))
+                                               .OrderBy(p => p)
+                                               .ToArray();
+
+                var dir2Directories = Directory.GetDirectories(dir2, "*", SearchOption.AllDirectories)
+                                               .Select(p => PathExtensions.GetRelativePath(dir2, p))
+                                               .OrderBy(p => p)
+                                               .ToArray();
+
+                // Compare number of files and directories
+                if (dir1Files.Length != dir2Files.Length || dir1Directories.Length != dir2Directories.Length)
+                {
+                    return false;
+                }
+
+                // Compare file contents
+                for (int i = 0; i < dir1Files.Length; i++)
+                {
+                    var relativePath1 = PathExtensions.GetRelativePath(dir1, dir1Files[i]);
+                    var relativePath2 = PathExtensions.GetRelativePath(dir2, dir2Files[i]);
+
+                    if (!FileContentsAreEqual(Path.Combine(dir1, dir1Files[i]), Path.Combine(dir2, dir2Files[i])))
+                    {
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error comparing directories: {ex.Message}");
                 return false;
-            }
-
-            // Compare file contents
-            for (int i = 0; i < dir1Files.Length; i++)
-            {
-                var relativePath1 = PathExtensions.GetRelativePath(dir1, dir1Files[i]);
-                var relativePath2 = PathExtensions.GetRelativePath(dir2, dir2Files[i]);
-
-                if (relativePath1 != relativePath2 || !FileContentsAreEqual(dir1Files[i], dir2Files[i]))
-                {
-                    return false;
-                }
-            }
-
-            // Compare directory structures
-            for (int i = 0; i < dir1Directories.Length; i++)
-            {
-                var relativePath1 = PathExtensions.GetRelativePath(dir1, dir1Directories[i]);
-                var relativePath2 = PathExtensions.GetRelativePath(dir2, dir2Directories[i]);
-
-                if (relativePath1 != relativePath2)
-                {
-                    return false;
-                }
             }
 
             return true;

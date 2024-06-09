@@ -6,38 +6,61 @@ namespace Veeam.Test.Task.FolderSynchronization
     internal class LogOperations
     {
         private readonly string logFilePath;
+        private readonly object fileLock = new object();
+
         public LogOperations(string logFilePath)
         {
             this.logFilePath = logFilePath;
+            EnsureLogFileExists();
         }
         public void LogEntries(string[] logEntries)
         {
-            EnsureLogFileExists();
             foreach (var entry in logEntries)
             {
-                string timestampedEntry = GetTimestampedEntry(entry);
-                Console.WriteLine(timestampedEntry);
-                File.AppendAllLines(logFilePath, new[] { timestampedEntry });
+                LogEntry(entry);
             }
         }
 
         public void LogEntry(string entry)
         {
-            EnsureLogFileExists();
-            string timestampedEntry = GetTimestampedEntry(entry);
-            Console.WriteLine(timestampedEntry);
-            File.AppendAllLines(logFilePath, new[] { timestampedEntry });
+            lock (fileLock)
+            {
+                try
+                {
+                    string timestampedEntry = GetTimestampedEntry(entry);
+                    Console.WriteLine(timestampedEntry);
+                    AppendTextToFile(timestampedEntry);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error writing log entry: {ex.Message}");
+                }
+            }
         }
         private void EnsureLogFileExists()
         {
-            if (!File.Exists(logFilePath))
+            try
             {
-                using (File.Create(logFilePath)) { }
+                if (!File.Exists(logFilePath))
+                {
+                    using (File.Create(logFilePath)) { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error ensuring log file exists: {ex.Message}");
             }
         }
         private string GetTimestampedEntry(string entry)
         {
             return $"{DateTime.Now:dd/MM/yyyy HH:mm:ss} - {entry}";
+        }
+        private void AppendTextToFile(string text)
+        {
+            using (var writer = new StreamWriter(logFilePath, true))
+            {
+                writer.WriteLine(text);
+            }
         }
     }
 }
